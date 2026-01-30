@@ -1,5 +1,6 @@
 "use client";
 
+import { supabase } from "@/lib/supabaseClient"
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -10,16 +11,23 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const u = localStorage.getItem("demo_user");
-    if (!u) {
+    const checkSession = async () => {
+      const { data, error } = await supabase.auth.getSession()
+
+      if (!data.session) {
       router.push("/login");
       return;
     }
-    setUser(u);
+    
+    // Save logged user's email so we can display
+      setUser(data.session.user.email ?? null)
+    };
+
+    checkSession();
   }, [router]);
 
-  function logout() {
-    localStorage.removeItem("demo_user");
+  async function logout() {
+    await supabase.auth.signOut();
     router.push("/login");
   }
 
