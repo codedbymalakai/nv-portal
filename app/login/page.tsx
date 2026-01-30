@@ -1,5 +1,6 @@
 "use client";
 
+import { supabase } from "@/lib/supabaseClient";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const router = useRouter();
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
 
     const cleanEmail = email.trim();
@@ -20,10 +21,16 @@ export default function LoginPage() {
 
     const cleanPassword = password.trim();
     if (!cleanPassword) return;
-    if (cleanPassword) console.log(cleanPassword)
 
-    // Fake "auth" for now
-    // localStorage.setItem("demo_user", cleanEmail);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: cleanPassword,
+    });
+
+    if (error) {
+      console.error(error.message);
+      return;
+    }
 
     router.push("/dashboard");
   }
@@ -47,6 +54,7 @@ export default function LoginPage() {
                 autoComplete="email"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
