@@ -26,6 +26,15 @@ export default function DashboardPage() {
     checkSession();
   }, [router]);
 
+  if (!user) {
+  return (
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <p className="text-sm opacity-70">Checking session...</p>
+    </main>
+  );
+}
+
+
   async function logout() {
     await supabase.auth.signOut();
     router.push("/login");
