@@ -224,7 +224,7 @@ async createNoteOnService(serviceId: string, noteBody: string) {
           types: [
             {
               associationCategory: "HUBSPOT_DEFINED",
-              associationTypeId: 190, // ⚠️ This may differ for your custom object
+              associationTypeId: 190, //  may differ 
             },
           ],
         },
