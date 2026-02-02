@@ -1,8 +1,10 @@
+// app/dashboard/page.tsx
 "use client";
 
 import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -29,13 +31,14 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [updates, setUpdates] = useState<ServiceUpdate[]>([]);
 
-  const [loadingProjects, setLoadingProjects] = useState(true);
-  const [loadingUpdates, setLoadingUpdates] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   const router = useRouter();
 
   useEffect(() => {
-    const checkSession = async () => {
+    const run = async () => {
       const { data, error } = await supabase.auth.getSession();
 
       if (error || !data.session) {
@@ -44,9 +47,7 @@ export default function DashboardPage() {
       }
 
       setUser(data.session.user.email ?? null);
-
-      setLoadingProjects(true);
-      setLoadingUpdates(true);
+      setLoading(true);
 
       const [updatesRes, projectsRes] = await Promise.all([
         supabase
@@ -62,26 +63,30 @@ export default function DashboardPage() {
       if (updatesRes.error) console.log(updatesRes.error.message);
       if (projectsRes.error) console.log(projectsRes.error.message);
 
-      setUpdates(updatesRes.data ?? []);
-      setProjects(projectsRes.data ?? []);
+      const fetchedUpdates = (updatesRes.data ?? []) as ServiceUpdate[];
+      const fetchedProjects = (projectsRes.data ?? []) as Project[];
 
-      setLoadingUpdates(false);
-      setLoadingProjects(false);
+      setUpdates(fetchedUpdates);
+      setProjects(fetchedProjects);
+
+      // default selection: first project
+      setSelectedProjectId((prev) => prev ?? fetchedProjects[0]?.id ?? null);
+
+      setLoading(false);
     };
 
-    checkSession();
+    run();
   }, [router]);
 
-  // Map project_id -> updates[]
-  const updatesByProject = useMemo(() => {
-    const map = new Map<string, ServiceUpdate[]>();
-    updates.forEach((u) => {
-      const list = map.get(u.project_id) ?? [];
-      list.push(u);
-      map.set(u.project_id, list);
-    });
-    return map;
-  }, [updates]);
+  const selectedProject = useMemo(() => {
+    if (!selectedProjectId) return null;
+    return projects.find((p) => p.id === selectedProjectId) ?? null;
+  }, [projects, selectedProjectId]);
+
+  const selectedProjectUpdates = useMemo(() => {
+    if (!selectedProjectId) return [];
+    return updates.filter((u) => u.project_id === selectedProjectId);
+  }, [updates, selectedProjectId]);
 
   async function logout() {
     await supabase.auth.signOut();
@@ -97,72 +102,77 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-start justify-center p-8">
-      <Card className="w-full max-w-5xl min-h-[70vh]">
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <Card className="w-full max-w-3xl">
         <CardHeader>
           <CardTitle>Dashboard</CardTitle>
         </CardHeader>
 
-        <CardContent className="grid gap-6 md:grid-cols-2">
+        <CardContent className="space-y-4">
           <p className="text-sm">Signed in as: {user}</p>
 
-          <section className="space-y-4 md:col-span-2">
-            <div className="text-sm font-medium">Projects</div>
+          {loading && <p className="text-sm opacity-70">Loading...</p>}
 
-            {loadingProjects && (
-              <p className="text-sm opacity-70">Loading projects...</p>
-            )}
+          {!loading && projects.length === 0 && (
+            <p className="text-sm opacity-70">No projects yet.</p>
+          )}
 
-            {!loadingProjects && projects.length === 0 && (
-              <p className="text-sm opacity-70">No projects yet.</p>
-            )}
+          {!loading && projects.length > 0 && (
+            <>
+              {/* Project selector */}
+              <div className="flex flex-wrap gap-2">
+                {projects.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedProjectId(p.id)}
+                    type="button"
+                    className={`text-xs px-3 py-1 rounded border transition ${
+                      selectedProjectId === p.id
+                        ? "bg-white/10"
+                        : "bg-transparent opacity-80"
+                    }`}
+                  >
+                    {p.name ?? "Untitled"}
+                  </button>
+                ))}
+              </div>
 
-            {!loadingProjects &&
-              projects.map((project) => {
-                const projectUpdates = updatesByProject.get(project.id) ?? [];
-
-                return (
-                  <div key={project.id} className="rounded-md border p-3 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium">
-                          {project.name ?? "Untitled project"}
-                        </div>
-                        <div className="text-xs opacity-70">
-                          Status: {project.status ?? "unknown"}
-                        </div>
+              {/* Selected project header */}
+              {selectedProject && (
+                <div className="border rounded p-3 space-y-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium">
+                        {selectedProject.name ?? "Untitled project"}
                       </div>
                       <div className="text-xs opacity-70">
-                        {projectUpdates.length} update
-                        {projectUpdates.length === 1 ? "" : "s"}
+                        Status: {selectedProject.status ?? "unknown"}
                       </div>
                     </div>
 
-                    {loadingUpdates && (
-                      <p className="text-sm opacity-70">Loading updates...</p>
-                    )}
-
-                    {!loadingUpdates && projectUpdates.length === 0 && (
-                      <p className="text-sm opacity-70">
-                        No updates for this project.
-                      </p>
-                    )}
-
-                    {!loadingUpdates &&
-                      projectUpdates.map((u) => (
-                        <div key={u.id} className="border-t pt-2">
-                          <div className="text-sm font-medium">
-                            {u.title ?? "Untitled"}
-                          </div>
-                          <div className="text-sm opacity-80">
-                            {u.body ?? ""}
-                          </div>
-                        </div>
-                      ))}
+                    <Link
+                      href={`/projects/${selectedProject.id}`}
+                      className="text-xs underline opacity-80"
+                    >
+                      View details
+                    </Link>
                   </div>
-                );
-              })}
-          </section>
+                </div>
+              )}
+
+              {/* Filtered updates */}
+              {selectedProjectId && selectedProjectUpdates.length === 0 && (
+                <p className="text-sm opacity-70">No updates for this project.</p>
+              )}
+
+              {selectedProjectUpdates.map((u) => (
+                <div key={u.id} className="text-sm border-b pb-2">
+                  <div className="font-medium">{u.title ?? "Untitled"}</div>
+                  <div className="opacity-80">{u.body ?? ""}</div>
+                </div>
+              ))}
+            </>
+          )}
 
           <Button onClick={logout} variant="outline" className="w-full">
             Log out
