@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { HubSpotClient } from '@/lib/hubspot/client'
 
 const accessToken = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
-const supabaseServiceRoleKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const supabaseURL = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 type HubSpotListResponse<T> = {
