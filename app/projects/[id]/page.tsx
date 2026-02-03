@@ -10,19 +10,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type ServiceUpdate = {
   id: string;
-  client_id: string | null;
-  project_id: string;
-  created_at: string;
+  project_id: string; // NOT NULL
+  occurred_at: string; // NOT NULL (matches your intent; if your DB allows null, change to string | null)
   title: string | null;
   body: string | null;
+  hubspot_note_id: string; // NOT NULL
 };
 
 type Project = {
   id: string;
   created_at: string;
-  client_id: string | null;
+  client_id: string; // NOT NULL
   name: string | null;
   status: string | null;
+  hubspot_service_id: string; // NOT NULL
 };
 
 export default function ProjectDetailPage() {
@@ -31,10 +32,8 @@ export default function ProjectDetailPage() {
   const projectId = params?.id;
 
   const [user, setUser] = useState<string | null>(null);
-
   const [project, setProject] = useState<Project | null>(null);
   const [updates, setUpdates] = useState<ServiceUpdate[]>([]);
-
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -56,12 +55,16 @@ export default function ProjectDetailPage() {
       setErrorMsg(null);
 
       const [projectRes, updatesRes] = await Promise.all([
-        supabase.from("projects").select("*").eq("id", projectId).single(),
+        supabase
+          .from("projects")
+          .select("id, created_at, client_id, name, status, hubspot_service_id")
+          .eq("id", projectId)
+          .single(),
         supabase
           .from("service_updates")
-          .select("*")
+          .select("id, project_id, occurred_at, title, body, hubspot_note_id")
           .eq("project_id", projectId)
-          .order("created_at", { ascending: false }),
+          .order("occurred_at", { ascending: false }),
       ]);
 
       if (projectRes.error) {
@@ -72,7 +75,7 @@ export default function ProjectDetailPage() {
       }
 
       if (updatesRes.error) {
-        setErrorMsg((prev) => prev ?? updatesRes.error?.message ?? "Error");
+        setErrorMsg((prev) => prev ?? updatesRes.error.message);
         setUpdates([]);
       } else {
         setUpdates((updatesRes.data ?? []) as ServiceUpdate[]);
@@ -137,6 +140,9 @@ export default function ProjectDetailPage() {
                   <div key={u.id} className="text-sm border-b pb-2">
                     <div className="font-medium">{u.title ?? "Untitled"}</div>
                     <div className="opacity-80">{u.body ?? ""}</div>
+                    <div className="text-xs opacity-60 mt-1">
+                      {new Date(u.occurred_at).toLocaleString()}
+                    </div>
                   </div>
                 ))}
               </div>
