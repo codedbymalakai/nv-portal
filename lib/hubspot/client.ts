@@ -203,7 +203,7 @@ export class HubSpotClient {
 
   // 
   async getServiceRecords() {
-  return this.get("/crm/v3/objects/0-162?properties=hs_object_id, hs_name, hs_status, hs_start_date, hs_target_end_date&associations=companies", {
+  return this.get("/crm/v3/objects/0-162?properties=hs_object_id, hs_name, hs_status, hs_start_date, hs_target_end_date, hubspot_owner_id&associations=companies", {
     query: { limit: 50 },
   });
 }
@@ -211,6 +211,10 @@ export class HubSpotClient {
 // Get a single Company by ID
 async getCompanyById(id: string) {
   return this.get(`/crm/v3/objects/companies/${id}?properties=hs_object_id, name, domain`);
+}
+
+async getOwnerById(id: string) {
+  return this.get(`/crm/v3/owners/${id}`)
 }
 
 // Create a note and attach it to a Service record
