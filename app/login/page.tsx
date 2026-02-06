@@ -36,7 +36,7 @@ export function AuthFooterLegal() {
         </Link>{' '}
         and{' '}
         <Link
-          href='/legal/privacy'
+          href='https://novocy.com/privacy-policy'
           className='font-medium underline underline-offset-4 transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
         >
           Privacy Policy
