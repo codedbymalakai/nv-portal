@@ -222,7 +222,7 @@ export default function LoginPage() {
             <div
               className={cn(
                 'h-[420px] w-[420px] rounded-full blur-3xl transition-opacity duration-500',
-                'bg-violet-500/20 opacity-20',
+                'dark:bg-violet-500/20 bg-[#998061] opacity-40 dark:opacity-30',
                 // stronger glow on focus within the auth card wrapper (see wrapper group below)
                 'group-focus-within:opacity-35',
                 // reduce distraction on motion-reduced setups
@@ -248,16 +248,29 @@ export default function LoginPage() {
           <div className='group relative w-full max-w-lg'>
             {/* Logo */}
             <div className='mb-6 flex justify-center'>
-              <img
-                src='/logo.svg'
-                alt='Novocy'
+              <svg
+                xmlns='http://www.w3.org/2000/svg'
+                viewBox='0 0 543.72 1022.51'
+                aria-label='Novocy'
                 className='
-        h-12 w-auto
-        opacity-90
-        select-none
-      '
-                draggable={false}
-              />
+    h-12 w-auto
+    text-foreground
+    dark:text-white
+    opacity-90
+    select-none
+  '
+              >
+                <g>
+                  <polygon
+                    fill='currentColor'
+                    points='0 793.26 85.21 793.26 85.21 409.82 381.41 1022.51 470.68 1022.51 87.24 231.28 0 231.28 0 793.26'
+                  />
+                  <polygon
+                    fill='currentColor'
+                    points='543.72 229.25 458.51 229.25 458.51 612.69 162.3 0 73.04 0 456.48 791.23 543.72 791.23 543.72 229.25'
+                  />
+                </g>
+              </svg>
             </div>
             <motion.div
               initial={reduceMotion ? false : { opacity: 0, y: 12 }}
