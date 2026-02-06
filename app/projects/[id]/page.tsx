@@ -7,7 +7,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
+import { ThemeToggle } from '@/components/theme-toggle';
 type ServiceUpdate = {
   id: string;
   created_at: string;
@@ -102,6 +102,20 @@ export default function ProjectDetailPage() {
 
   return (
     <main className='min-h-screen flex items-center justify-center p-6'>
+      <ThemeToggle
+        className='
+          fixed
+          bottom-4
+          right-4
+          z-50
+          rounded-full
+          shadow-sm
+          backdrop-blur
+          bg-background/80
+          dark:border-white/5
+          border-black/5
+        '
+      />
       <Card className='w-full max-w-3xl'>
         <CardHeader className='space-y-2'>
           <div className='flex items-center justify-between gap-3'>
