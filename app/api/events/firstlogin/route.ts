@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     const hubspot = new HubSpotEventsClient();
 
     // Fire-and-forget semantics, but still awaited for delivery
-    await hubspot.sendLoginEvent({
+    await hubspot.sendFirstLoginEvent({
       email,
       loginTimestamp,
     });

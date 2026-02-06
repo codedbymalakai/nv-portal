@@ -1,12 +1,12 @@
 // app/projects/[id]/page.tsx
-"use client";
+'use client';
 
-import { supabase } from "@/lib/supabaseClient";
-import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from '@/lib/supabase/supabaseClient';
+import { useEffect, useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 type ServiceUpdate = {
   id: string;
@@ -48,7 +48,7 @@ export default function ProjectDetailPage() {
         await supabase.auth.getSession();
 
       if (sessionError || !sessionData.session) {
-        router.push("/login");
+        router.push('/login');
         return;
       }
 
@@ -59,15 +59,17 @@ export default function ProjectDetailPage() {
 
       const [projectRes, updatesRes] = await Promise.all([
         supabase
-          .from("projects")
-          .select("id, created_at, client_id, name, status, hubspot_service_id")
-          .eq("id", projectId)
+          .from('projects')
+          .select('id, created_at, client_id, name, status, hubspot_service_id')
+          .eq('id', projectId)
           .single(),
         supabase
-          .from("service_updates")
-          .select("id, project_id, created_at, occurred_at, title, body, hubspot_note_id")
-          .eq("project_id", projectId)
-          .order("occurred_at", { ascending: false })
+          .from('service_updates')
+          .select(
+            'id, project_id, created_at, occurred_at, title, body, hubspot_note_id',
+          )
+          .eq('project_id', projectId)
+          .order('occurred_at', { ascending: false }),
       ]);
 
       if (projectRes.error) {
@@ -92,58 +94,58 @@ export default function ProjectDetailPage() {
 
   if (!user) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <p className="text-sm opacity-70">Checking session...</p>
+      <main className='min-h-screen flex items-center justify-center p-6'>
+        <p className='text-sm opacity-70'>Checking session...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <Card className="w-full max-w-3xl">
-        <CardHeader className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
+    <main className='min-h-screen flex items-center justify-center p-6'>
+      <Card className='w-full max-w-3xl'>
+        <CardHeader className='space-y-2'>
+          <div className='flex items-center justify-between gap-3'>
             <CardTitle>Project</CardTitle>
-            <Link href="/dashboard" className="text-sm underline opacity-80">
+            <Link href='/dashboard' className='text-sm underline opacity-80'>
               Back
             </Link>
           </div>
-          <p className="text-xs opacity-70">Signed in as: {user}</p>
+          <p className='text-xs opacity-70'>Signed in as: {user}</p>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          {loading && <p className="text-sm opacity-70">Loading...</p>}
+        <CardContent className='space-y-4'>
+          {loading && <p className='text-sm opacity-70'>Loading...</p>}
 
           {!loading && errorMsg && (
-            <div className="text-sm border rounded p-3">
-              <div className="font-medium">Couldn’t load project</div>
-              <div className="opacity-80">{errorMsg}</div>
+            <div className='text-sm border rounded p-3'>
+              <div className='font-medium'>Couldn’t load project</div>
+              <div className='opacity-80'>{errorMsg}</div>
             </div>
           )}
 
           {!loading && !errorMsg && project && (
             <>
-              <div className="border rounded p-3 space-y-1">
-                <div className="text-sm font-medium">
-                  {project.name ?? "Untitled project"}
+              <div className='border rounded p-3 space-y-1'>
+                <div className='text-sm font-medium'>
+                  {project.name ?? 'Untitled project'}
                 </div>
-                <div className="text-xs opacity-70">
-                  Status: {project.status ?? "unknown"}
+                <div className='text-xs opacity-70'>
+                  Status: {project.status ?? 'unknown'}
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="text-sm font-medium">Service updates</div>
+              <div className='space-y-2'>
+                <div className='text-sm font-medium'>Service updates</div>
 
                 {updates.length === 0 && (
-                  <p className="text-sm opacity-70">No updates yet.</p>
+                  <p className='text-sm opacity-70'>No updates yet.</p>
                 )}
 
                 {updates.map((u) => (
-                  <div key={u.id} className="text-sm border-b pb-2">
-                    <div className="font-medium">{u.title ?? "Untitled"}</div>
-                    <div className="opacity-80">{u.body ?? ""}</div>
-                    <div className="text-xs opacity-60 mt-1">
+                  <div key={u.id} className='text-sm border-b pb-2'>
+                    <div className='font-medium'>{u.title ?? 'Untitled'}</div>
+                    <div className='opacity-80'>{u.body ?? ''}</div>
+                    <div className='text-xs opacity-60 mt-1'>
                       {new Date(u.occurred_at).toLocaleString()}
                     </div>
                   </div>
@@ -153,9 +155,9 @@ export default function ProjectDetailPage() {
           )}
 
           <Button
-            onClick={() => router.push("/dashboard")}
-            variant="outline"
-            className="w-full"
+            onClick={() => router.push('/dashboard')}
+            variant='outline'
+            className='w-full'
           >
             Back to dashboard
           </Button>

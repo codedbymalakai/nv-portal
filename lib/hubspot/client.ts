@@ -217,38 +217,6 @@ export class HubSpotClient {
     return this.request<T>('DELETE', endpoint, opts);
   }
 
-  // Send a custom behavioral event to HubSpot
-  async sendCustomEvent(
-    eventName: string,
-    email: string,
-    properties?: Record<string, string | number | boolean | null>,
-  ) {
-    return this.post('/events/v3/send', {
-      json: {
-        eventName,
-        email,
-        properties,
-      },
-    });
-  }
-
-  // Send a login event for a user
-  async sendLoginEvent(params: {
-    email: string;
-    loginTimestamp?: string | Date;
-  }) {
-    const { email, loginTimestamp } = params;
-
-    const timestamp =
-      loginTimestamp instanceof Date
-        ? loginTimestamp.toISOString()
-        : (loginTimestamp ?? new Date().toISOString());
-
-    return this.sendCustomEvent('pe26109463_client_portal_login', email, {
-      login_timestamp: timestamp,
-    });
-  }
-
   //
   async getServiceRecords() {
     return this.get(

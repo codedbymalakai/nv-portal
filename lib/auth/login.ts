@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabase/supabaseClient';
 
 export async function signInWithEmailPassword(email: string, password: string) {
   const cleanEmail = email.trim();
@@ -15,22 +15,6 @@ export async function signInWithEmailPassword(email: string, password: string) {
 
   if (error) {
     throw error;
-  }
-
-  // Fire-and-forget login event
-  const user = data?.user;
-  if (user?.email && user?.id) {
-    fetch('/api/events/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: user.email,
-        userUuid: user.id,
-        loginTimestamp: new Date().toISOString(),
-      }),
-    }).catch(() => {
-      // intentionally ignored
-    });
   }
 
   return data;
