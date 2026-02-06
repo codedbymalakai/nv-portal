@@ -22,11 +22,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang='en' className={notoSans.variable}>
+    <html lang='en' className={notoSans.variable} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
@@ -36,7 +36,7 @@ export default function RootLayout({
           async
           defer
           src='//js-eu1.hs-scripts.com/26109463.js'
-        ></script>
+        />
 
         <ThemeProvider
           attribute='class'
