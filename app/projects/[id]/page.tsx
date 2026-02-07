@@ -11,12 +11,16 @@ import { ServiceUpdatesTimeline } from '@/components/projects/service-updates-ti
 import { TrustFooter } from '@/components/projects/trust-footer';
 import { TopBar } from '@/components/dashboard/top-bar';
 
-type Project = {
+export type Project = {
   id: string;
   name: string | null;
   status: 'Open' | 'Closed' | null;
   stage: string;
   created_at: string;
+  target_end_date?: string | null;
+  owner_first_name?: string | null;
+  owner_last_name?: string | null;
+  owner_email?: string | null;
 };
 
 type ServiceUpdate = {

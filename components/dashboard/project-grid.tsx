@@ -5,11 +5,16 @@ import { Button } from '@/components/ui/button';
 import { FolderOpenIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Project = {
+export type Project = {
   id: string;
   name: string | null;
-  status: string | null;
+  status: 'Open' | 'Closed' | null;
   stage: string;
+  created_at: string;
+  target_end_date?: string | null;
+  owner_first_name?: string | null;
+  owner_last_name?: string | null;
+  owner_email?: string | null;
 };
 
 type ProjectGridProps = {

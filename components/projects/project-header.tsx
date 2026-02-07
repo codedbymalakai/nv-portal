@@ -8,14 +8,15 @@ import { StageTimeline } from './stages';
 
 type ProjectHeaderProps = {
   project: {
+    id: string;
     name: string | null;
     status: 'Open' | 'Closed' | null;
     stage: string;
     created_at: string;
-    target_end_date: string | null;
-    owner_first_name: string | null;
-    owner_last_name: string | null;
-    owner_email: string | null;
+    target_end_date?: string | null;
+    owner_first_name?: string | null;
+    owner_last_name?: string | null;
+    owner_email?: string | null;
   };
 };
 
