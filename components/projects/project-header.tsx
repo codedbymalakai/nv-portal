@@ -21,6 +21,20 @@ type ProjectHeaderProps = {
   };
 };
 
+type StageLabel = 'Design' | 'Build' | 'UAT' | 'Training' | 'Warranty' | 'Closed' | 'Completed';
+
+function isStageLabel(value: string): value is StageLabel {
+  return (
+    value === 'Design' ||
+    value === 'Build' ||
+    value === 'UAT' ||
+    value === 'Training' ||
+    value === 'Warranty' ||
+    value === 'Closed' ||
+    value === 'Completed'
+  );
+}
+
 function MetadataItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-[140px]">
@@ -129,7 +143,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
 
         {/* Right: timeline */}
         <div className="pt-1">
-          <StageTimeline activeStage={stageKeyMap[stage] ?? 'design'} />
+          <StageTimeline activeStage={isStageLabel(stage) ? stageKeyMap[stage] : 'design'} />
         </div>
       </div>
 
