@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
@@ -10,7 +10,7 @@ const ALLOWED_TYPES = ["update", "action", "milestone", "message"];
 
 export async function POST(request: Request) {
   try {
-    const secret = request?.headers?.get("x-portal-secret");
+    const secret = request.headers.get("x-portal-secret");
     if (secret !== process.env.HUBSPOT_PRIVATE_SECRET) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     const {error: serviceError} = await supabase
     .from("service_updates")
     .insert({
-        project_id: projectId,
+        project_id: project.id,
         title,
         body,
         occurred_at,
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     })
 
     if (serviceError) {
-        NextResponse.json({error: serviceError.message}, { status:500 })
+        return NextResponse.json({error: serviceError.message}, { status:500 })
     }
     return NextResponse.json({ success: true })
   } catch (err) {
