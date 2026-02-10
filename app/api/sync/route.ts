@@ -1,120 +1,212 @@
-import { NextResponse } from 'next/server';
-import { HubSpotClient } from '@/lib/hubspot/client';
-import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from "next/server";
+import { HubSpotClient } from "@/lib/hubspot/client";
+import { createClient } from "@supabase/supabase-js";
 
 const accessToken = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+if (!accessToken) throw new Error("Missing HUBSPOT_PRIVATE_APP_TOKEN");
+if (!supabaseUrl) throw new Error("Missing SUPABASE_URL");
+if (!supabaseServiceRoleKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
 
-type HubSpotListResponse<T> = { results: T[] };
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-async function fetchServiceRecords(): Promise<HubSpotListResponse<any>> {
-  const hubspot = new HubSpotClient(accessToken);
-  const res = await hubspot.getServiceRecords();
-  if (res.status === 'error') throw new Error(res.reason);
-  return res.data as HubSpotListResponse<any>;
+type HubSpotListResponse<T> = {
+  results: T[];
+  paging?: { next?: { after?: string } };
+};
+
+type ServiceRecord = {
+  id: string;
+  properties?: Record<string, any>;
+  associations?: { companies?: { results?: Array<{ id: string }> } };
+};
+
+type ProjectStatus = "Open" | "Closed" | null;
+
+function mapHubSpotStatusToProjectStatus(status: unknown): ProjectStatus {
+  if (typeof status !== "string") return null;
+
+  // Treat completed/succeeded as Closed
+  if (status === "succeeded_completed") return "Closed";
+
+  // Everything else is considered Open
+  return "Open";
 }
 
-async function fetchCompanyRecordById(id: string): Promise<any> {
-  const hubspot = new HubSpotClient(accessToken);
-  const res = await hubspot.getCompanyById(id);
-  if (res.status === 'error') throw new Error(res.reason);
-  return res.data;
+
+function parsePositiveInt(value: string | null, fallback: number, max: number) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(Math.floor(n), max);
 }
 
-async function fetchOwnerById(id: string): Promise<any> {
-  if (!id) return null;
-  const hubspot = new HubSpotClient(accessToken);
-  const response = await hubspot.getOwnerById(id);
-  if (response.status === 'error') throw new Error(response.reason);
-  return response.data;
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let i = 0;
+
+  const workers = new Array(Math.min(limit, items.length)).fill(null).map(async () => {
+    while (true) {
+      const idx = i++;
+      if (idx >= items.length) break;
+      results[idx] = await fn(items[idx], idx);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
 }
 
-async function getOrCreateClientId(opts: {
-  hubspotCompanyId: string;
-  companyName?: string | null;
-  domain?: string | null;
-}) {
-  const { hubspotCompanyId, companyName, domain } = opts;
+async function fetchServiceRecordsPaged(opts: {
+  hubspot: HubSpotClient;
+  limit: number;
+  pages: number;
+}): Promise<ServiceRecord[]> {
+  const { hubspot, limit, pages } = opts;
 
-  // 1) Try find
-  const { data: existing, error: findErr } = await supabase
-    .from('clients')
-    .select('id')
-    .eq('hubspot_company_id', hubspotCompanyId)
-    .maybeSingle();
+  const all: ServiceRecord[] = [];
+  let after: string | undefined = undefined;
 
-  if (findErr) {
-    // maybeSingle() should not throw on 0 rows, so anything here is usually real
-    throw new Error(`Failed to lookup client: ${findErr.message}`);
+  for (let page = 0; page < pages; page++) {
+    const res = await hubspot.getServiceRecords({
+      limit,
+      after,
+      associations: ["companies"],
+      properties: [
+        "hs_object_id",
+        "hs_name",
+        "hs_status",
+        "hs_start_date",
+        "hs_target_end_date",
+        "hubspot_owner_id",
+      ],
+    });
+
+    if (res.status === "error") throw new Error(res.reason);
+
+    const data = res.data as HubSpotListResponse<ServiceRecord>;
+    all.push(...(data.results ?? []));
+
+    after = data.paging?.next?.after;
+    if (!after) break;
   }
 
-  if (existing?.id) return existing.id;
-
-  // 2) Create if missing
-  const { data: created, error: insertErr } = await supabase
-    .from('clients')
-    .insert({
-      hubspot_company_id: hubspotCompanyId,
-      name: companyName ?? null,
-      domain: domain ?? null,
-    })
-    .select('id')
-    .single();
-
-  if (insertErr) throw new Error(`Failed to create client: ${insertErr.message}`);
-
-  return created.id;
+  return all;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const startedAt = Date.now();
+
   try {
-    const services = await fetchServiceRecords();
+    const url = new URL(req.url);
 
-    const validServices: any[] = [];
-    const invalidServices: any[] = [];
+    const limit = parsePositiveInt(url.searchParams.get("limit"), 25, 100);
+    const pages = parsePositiveInt(url.searchParams.get("pages"), 1, 5);
+    const concurrency = parsePositiveInt(url.searchParams.get("concurrency"), 5, 15);
 
-    for (const service of services.results) {
-      const companies = service.associations?.companies?.results ?? [];
+    const hubspot = new HubSpotClient(accessToken);
 
-      const ownerId = service.properties?.hubspot_owner_id;
-      const owner = await fetchOwnerById(ownerId);
+    const ownerCache = new Map<string, any>();
+    const companyCache = new Map<string, any>();
 
-      if (companies.length === 1) {
-        const companyId = companies[0].id;
-        const company = await fetchCompanyRecordById(companyId);
+    async function getOwner(ownerId?: string | null) {
+      if (!ownerId) return null;
+      if (ownerCache.has(ownerId)) return ownerCache.get(ownerId);
 
-        validServices.push({
-          id: service.id,
-          name: service.properties?.hs_name,
-          status: service.properties?.hs_status,
-          start_date: service.properties?.hs_start_date,
-          target_end_date: service.properties?.hs_target_end_date,
+      const res = await hubspot.getOwnerById(ownerId);
+      if (res.status === "error") throw new Error(res.reason);
 
-          owner: ownerId,
-          owner_first_name: owner?.firstName ?? null,
-          owner_last_name: owner?.lastName ?? null,
-          owner_email: owner?.email ?? null,
-
-          hubspot_company_id: companyId,
-          company_name: company?.properties?.name ?? null,
-          company_domain: company?.properties?.domain ?? null, // optional, if available
-        });
-      } else {
-        invalidServices.push({
-          id: service.id,
-          companyCount: companies.length,
-        });
-      }
+      ownerCache.set(ownerId, res.data);
+      return res.data;
     }
 
-    // Sync each service -> ensure client exists -> upsert project linked to client
+    async function getCompany(companyId: string) {
+      if (companyCache.has(companyId)) return companyCache.get(companyId);
+
+      const res = await hubspot.getCompanyById(companyId);
+      if (res.status === "error") throw new Error(res.reason);
+
+      companyCache.set(companyId, res.data);
+      return res.data;
+    }
+
+    const services = await fetchServiceRecordsPaged({ hubspot, limit, pages });
+
+    const invalidServices: Array<{ id: string; companyCount: number }> = [];
+
+    const enriched = await mapLimit(services, concurrency, async (service) => {
+      const companies = service.associations?.companies?.results ?? [];
+      if (companies.length !== 1) {
+        invalidServices.push({ id: service.id, companyCount: companies.length });
+        return null;
+      }
+
+      const companyId = companies[0].id;
+      const ownerId = service.properties?.hubspot_owner_id ?? null;
+
+      const [owner, company] = await Promise.all([
+        getOwner(ownerId),
+        getCompany(companyId),
+      ]);
+
+      return {
+        id: service.id,
+        name: service.properties?.hs_name ?? null,
+        status: service.properties?.hs_status ?? null,
+        start_date: service.properties?.hs_start_date ?? null,
+        target_end_date: service.properties?.hs_target_end_date ?? null,
+        hubspot_owner_id: ownerId,
+        owner_first_name: owner?.firstName ?? null,
+        owner_last_name: owner?.lastName ?? null,
+        owner_email: owner?.email ?? null,
+        hubspot_company_id: companyId,
+        company_name: company?.properties?.name ?? null,
+        company_domain: company?.properties?.domain ?? null,
+      };
+    });
+
+    const validServices = enriched.filter(
+      (x): x is NonNullable<typeof x> => x !== null
+    );
+
+    async function getOrCreateClientId(opts: {
+      hubspotCompanyId: string;
+      companyName?: string | null;
+      domain?: string | null;
+    }) {
+      const { hubspotCompanyId, companyName, domain } = opts;
+
+      const { data: existing, error: findErr } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("hubspot_company_id", hubspotCompanyId)
+        .maybeSingle();
+
+      if (findErr) throw new Error(`Failed to lookup client: ${findErr.message}`);
+      if (existing?.id) return existing.id;
+
+      const { data: created, error: insertErr } = await supabase
+        .from("clients")
+        .insert({
+          hubspot_company_id: hubspotCompanyId,
+          name: companyName ?? null,
+          domain: domain ?? null,
+        })
+        .select("id")
+        .single();
+
+      if (insertErr) throw new Error(`Failed to create client: ${insertErr.message}`);
+      return created.id;
+    }
+
     const projectErrors: Array<{ serviceId: string; error: string }> = [];
 
-    for (const service of validServices) {
+    await mapLimit(validServices, Math.min(concurrency, 5), async (service) => {
       try {
         const clientId = await getOrCreateClientId({
           hubspotCompanyId: service.hubspot_company_id,
@@ -122,43 +214,55 @@ export async function GET() {
           domain: service.company_domain,
         });
 
+        const mappedStatus = mapHubSpotStatusToProjectStatus(service.status);
+
         const { error: upsertErr } = await supabase
-          .from('projects')
+          .from("projects")
           .upsert(
             {
               hubspot_service_id: service.id,
               name: service.name,
-              status: service.status,
+              status: mappedStatus, // ✅ ENUM SAFE
               start_date: service.start_date,
               target_end_date: service.target_end_date,
-              hubspot_owner_id: service.owner,
+              hubspot_owner_id: service.hubspot_owner_id,
               owner_first_name: service.owner_first_name,
               owner_last_name: service.owner_last_name,
               owner_email: service.owner_email,
               client_id: clientId,
             },
-            {
-              // make sure hubspot_service_id is unique in DB or set your conflict target here
-              onConflict: 'hubspot_service_id',
-            }
+            { onConflict: "hubspot_service_id" }
           );
 
-        if (upsertErr) {
+        if (upsertErr)
           projectErrors.push({ serviceId: service.id, error: upsertErr.message });
-        }
       } catch (e: any) {
         projectErrors.push({ serviceId: service.id, error: e?.message ?? String(e) });
       }
-    }
+    });
+
+    const ms = Date.now() - startedAt;
 
     return NextResponse.json({
       success: projectErrors.length === 0,
-      count: validServices.length,
+      meta: {
+        fetched: services.length,
+        valid: validServices.length,
+        invalid: invalidServices.length,
+        limit,
+        pages,
+        concurrency,
+        duration_ms: ms,
+      },
       results: validServices,
-      warnings: invalidServices.length > 0 ? invalidServices : undefined,
-      projectErrors: projectErrors.length > 0 ? projectErrors : undefined,
+      warnings: invalidServices.length ? invalidServices : undefined,
+      projectErrors: projectErrors.length ? projectErrors : undefined,
     });
-  } catch (err) {
-    return NextResponse.json({ success: false, error: String(err) }, { status: 500 });
+  } catch (err: any) {
+    console.error("SYNC ERROR:", err);
+    return NextResponse.json(
+      { success: false, error: err?.message ?? String(err) },
+      { status: 500 }
+    );
   }
 }

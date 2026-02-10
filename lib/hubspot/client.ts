@@ -1,18 +1,16 @@
 // lib/hubspot/client.ts
-// Server-only HubSpot API wrapper for Next.js (Node 18+ has global fetch)
+import "server-only";
 
-import 'server-only';
-
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 export type HubSpotOk<T = unknown> = {
-  status: 'ok';
+  status: "ok";
   data: T;
   statusCode: number;
 };
 
 export type HubSpotErr = {
-  status: 'error';
+  status: "error";
   reason: string;
   statusCode?: number;
   details?: unknown;
@@ -27,17 +25,17 @@ export type RequestOptions = {
   query?: Record<string, QueryValue>;
   headers?: Record<string, string>;
   timeoutMs?: number;
-  retries?: number; // default 3
+  retries?: number;
 };
 
-const BASE_URL = 'https://api.hubapi.com';
+const BASE_URL = "https://api.hubapi.com";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_RETRIES = 3;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const buildUrl = (endpoint: string, query?: RequestOptions['query']) => {
-  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+const buildUrl = (endpoint: string, query?: RequestOptions["query"]) => {
+  const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = new URL(path, BASE_URL);
 
   if (query) {
@@ -53,7 +51,7 @@ const buildUrl = (endpoint: string, query?: RequestOptions['query']) => {
 const isTransientStatus = (status: number) =>
   status === 429 || status === 408 || (status >= 500 && status <= 599);
 
-const isAbortError = (err: unknown) => err instanceof DOMException && err.name === 'AbortError';
+const isAbortError = (err: unknown) => err instanceof DOMException && err.name === "AbortError";
 
 const parseRetryAfterMs = (retryAfterHeader: string | null) => {
   if (!retryAfterHeader) return null;
@@ -70,22 +68,29 @@ const safeJsonParse = (text: string) => {
   }
 };
 
+export type GetServiceRecordsOpts = {
+  limit?: number; // 1..100
+  after?: string; // paging cursor
+  associations?: string[]; // e.g. ["companies"]
+  properties?: string[]; // e.g. ["hs_name", ...]
+};
+
 export class HubSpotClient {
   private token: string;
 
   constructor(token?: string) {
     const envToken = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
-    this.token = token ?? envToken ?? '';
+    this.token = token ?? envToken ?? "";
 
     if (!this.token) {
-      throw new Error('Missing HUBSPOT_PRIVATE_APP_TOKEN env var (or pass token to constructor).');
+      throw new Error("Missing HUBSPOT_PRIVATE_APP_TOKEN env var (or pass token to constructor).");
     }
   }
 
   private async request<T>(
     method: HttpMethod,
     endpoint: string,
-    opts: RequestOptions = {},
+    opts: RequestOptions = {}
   ): Promise<HubSpotResult<T>> {
     const url = buildUrl(endpoint, opts.query);
     const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -96,10 +101,9 @@ export class HubSpotClient {
       ...(opts.headers ?? {}),
     };
 
-    // Only set JSON content-type if we're actually sending a JSON body.
-    const hasBody = opts.json !== undefined && method !== 'GET' && method !== 'DELETE';
-    if (hasBody && !baseHeaders['Content-Type']) {
-      baseHeaders['Content-Type'] = 'application/json';
+    const hasBody = opts.json !== undefined && method !== "GET" && method !== "DELETE";
+    if (hasBody && !baseHeaders["Content-Type"]) {
+      baseHeaders["Content-Type"] = "application/json";
     }
 
     for (let attempt = 0; attempt < retries; attempt++) {
@@ -114,17 +118,14 @@ export class HubSpotClient {
           signal: controller.signal,
         });
 
-        // Handle 429 / 5xx with retry
         if (!res.ok) {
           const statusCode = res.status;
 
-          const bodyText = await res.text().catch(() => '');
+          const bodyText = await res.text().catch(() => "");
           const parsed = bodyText ? safeJsonParse(bodyText) : { ok: true as const, data: null };
 
-          // Retry on transient errors if attempts remain
           if (isTransientStatus(statusCode) && attempt < retries - 1) {
-            const retryAfterMs = parseRetryAfterMs(res.headers.get('retry-after'));
-            // basic exponential backoff with a small floor
+            const retryAfterMs = parseRetryAfterMs(res.headers.get("retry-after"));
             const backoffMs = Math.max(500, 500 * 2 ** attempt);
             const waitMs = retryAfterMs ?? backoffMs;
             clearTimeout(timeout);
@@ -133,41 +134,35 @@ export class HubSpotClient {
           }
 
           return {
-            status: 'error',
+            status: "error",
             reason: `HTTP ${statusCode} ${res.statusText}`,
             statusCode,
             details: parsed.data,
           };
         }
 
-        // Parse response body (some endpoints return empty body)
-        const raw = await res.text().catch(() => '');
+        const raw = await res.text().catch(() => "");
         if (!raw) {
-          return {
-            status: 'ok',
-            data: undefined as unknown as T,
-            statusCode: res.status,
-          };
+          return { status: "ok", data: undefined as unknown as T, statusCode: res.status };
         }
 
         const parsed = safeJsonParse(raw);
         if (!parsed.ok) {
           return {
-            status: 'error',
-            reason: 'Response was not valid JSON',
+            status: "error",
+            reason: "Response was not valid JSON",
             statusCode: res.status,
             details: parsed.data,
           };
         }
 
-        return { status: 'ok', data: parsed.data as T, statusCode: res.status };
+        return { status: "ok", data: parsed.data as T, statusCode: res.status };
       } catch (err: unknown) {
         const message =
-          err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
+          err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error";
 
-        // Retry on network/timeout errors if attempts remain
         const canRetry =
-          (isAbortError(err) || message.toLowerCase().includes('fetch')) && attempt < retries - 1;
+          (isAbortError(err) || message.toLowerCase().includes("fetch")) && attempt < retries - 1;
         if (canRetry) {
           clearTimeout(timeout);
           const backoffMs = Math.max(500, 500 * 2 ** attempt);
@@ -175,86 +170,73 @@ export class HubSpotClient {
           continue;
         }
 
-        return { status: 'error', reason: message };
+        return { status: "error", reason: message };
       } finally {
         clearTimeout(timeout);
       }
     }
 
-    return { status: 'error', reason: 'Max retries exceeded' };
+    return { status: "error", reason: "Max retries exceeded" };
   }
 
   get<T = unknown>(endpoint: string, opts?: RequestOptions) {
-    return this.request<T>('GET', endpoint, opts);
+    return this.request<T>("GET", endpoint, opts);
   }
-
   post<T = unknown>(endpoint: string, opts?: RequestOptions) {
-    return this.request<T>('POST', endpoint, opts);
+    return this.request<T>("POST", endpoint, opts);
   }
-
   patch<T = unknown>(endpoint: string, opts?: RequestOptions) {
-    return this.request<T>('PATCH', endpoint, opts);
+    return this.request<T>("PATCH", endpoint, opts);
   }
-
   put<T = unknown>(endpoint: string, opts?: RequestOptions) {
-    return this.request<T>('PUT', endpoint, opts);
+    return this.request<T>("PUT", endpoint, opts);
   }
-
   delete<T = unknown>(endpoint: string, opts?: RequestOptions) {
-    return this.request<T>('DELETE', endpoint, opts);
+    return this.request<T>("DELETE", endpoint, opts);
   }
 
-  //
-  async getServiceRecords() {
-    return this.get(
-      '/crm/v3/objects/0-162?properties=hs_object_id, hs_name, hs_status, hs_start_date, hs_target_end_date, hubspot_owner_id&associations=companies',
-      {
-        query: { limit: 50 },
-      },
-    );
+  async getServiceRecords(opts: GetServiceRecordsOpts = {}) {
+    const {
+      limit = 50,
+      after,
+      associations = ["companies"],
+      properties = [
+        "hs_object_id",
+        "hs_name",
+        "hs_status",
+        "hs_start_date",
+        "hs_target_end_date",
+        "hubspot_owner_id",
+      ],
+    } = opts;
+
+    const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+
+    // repeated params (because buildUrl's query uses .set which overwrites duplicates)
+    const propsQs = properties.map((p) => `properties=${encodeURIComponent(p)}`).join("&");
+    const assocQs = associations.map((a) => `associations=${encodeURIComponent(a)}`).join("&");
+
+    const parts: string[] = [
+      propsQs,
+      assocQs,
+      `limit=${encodeURIComponent(String(safeLimit))}`,
+    ];
+    if (after) parts.push(`after=${encodeURIComponent(after)}`);
+
+    const endpoint = `/crm/v3/objects/0-162?${parts.join("&")}`;
+    return this.get(endpoint);
   }
 
-  // Get a single Company by ID
   async getCompanyById(id: string) {
-    return this.get(`/crm/v3/objects/companies/${id}?properties=hs_object_id, name, domain`);
+    // same repeated-param approach, avoid spaces in properties list
+    const endpoint =
+      `/crm/v3/objects/companies/${encodeURIComponent(id)}?` +
+      ["hs_object_id", "name", "domain"].map((p) => `properties=${encodeURIComponent(p)}`).join("&");
+
+    return this.get(endpoint);
   }
 
   async getOwnerById(id: string) {
-    return this.get(`/crm/v3/owners/${id}`);
+    return this.get(`/crm/v3/owners/${encodeURIComponent(id)}`);
   }
-
-  // Create a note and attach it to a Service record
-  // async createNoteOnService(serviceId: string, noteBody: string) {
-  //   return this.post("/crm/v3/objects/notes", {
-  //     json: {
-  //       properties: {
-  //         hs_note_body: noteBody,
-  //       },
-  //       associations: [
-  //         {
-  //           to: { id: serviceId },
-  //           types: [
-  //             {
-  //               associationCategory: "HUBSPOT_DEFINED",
-  //               associationTypeId: 190, //  may differ
-  //             },
-  //           ],
-  //         },
-  //       ],
-  //     },
-  //   });
-  // }
 }
-
-/*
-Usage example (server code only):
-
-import { HubSpotClient } from "@/lib/hubspot/HubSpotClient";
-
-const hs = new HubSpotClient();
-
-const res = await hs.get("/crm/v3/objects/companies", { query: { limit: 10 } });
-
-if (res.status === "ok") console.log(res.data);
-else console.error(res.statusCode, res.reason, res.details);
-*/
